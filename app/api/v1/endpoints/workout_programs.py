@@ -3,9 +3,8 @@ from sqlmodel import Session, select
 from typing import List
 from uuid import UUID
 
-from app.api.v1.deps import get_current_user
+from app.api.v1.deps import get_current_user, get_owned_workout_program
 from app.core.database import get_session
-from app.core.exceptions import RoutineNotFoundError, ExerciseNotFoundError
 from app.models.user import User
 from app.models.exercise import Exercise
 from app.models.workout_program import WorkoutProgram
@@ -21,10 +20,7 @@ from app.schemas.workout_program import (
 router = APIRouter(prefix="/workout-programs", tags=["Workout Programs"])
 
 
-def _assert_program_owned(program: WorkoutProgram | None, user_id: UUID) -> WorkoutProgram:
-    if not program or program.user_id != user_id:
-        raise RoutineNotFoundError()
-    return program
+
 
 
 def _deactivate_others(session: Session, user_id: UUID) -> None:
@@ -84,12 +80,9 @@ def get_workout_programs(
     summary="Obtener un programa con sus rutinas y ejercicios",
 )
 def get_workout_program(
-    program_id: UUID,
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+    program: WorkoutProgram = Depends(get_owned_workout_program),
 ) -> WorkoutProgramDetail:
-    program = session.get(WorkoutProgram, program_id)
-    return _assert_program_owned(program, current_user.id)
+    return program
 
 
 @router.put(
@@ -99,22 +92,18 @@ def get_workout_program(
     summary="Actualizar un programa y sus rutinas",
 )
 def update_workout_program(
-    program_id: UUID,
     program_in: WorkoutProgramUpdate,
-    current_user: User = Depends(get_current_user),
+    program: WorkoutProgram = Depends(get_owned_workout_program),
     session: Session = Depends(get_session),
 ) -> WorkoutProgramDetail:
-    program = session.get(WorkoutProgram, program_id)
-    _assert_program_owned(program, current_user.id)
-
     update_data = program_in.model_dump(exclude_unset=True)
 
     if update_data.get("is_active") is True and not program.is_active:
-        _deactivate_others(session, current_user.id)
+        _deactivate_others(session, program.user_id)
 
-    for key, value in update_data.items():
-        if key != "routines":
-            setattr(program, key, value)
+    # Excluir 'routines' si viene para actualizar el programa de manera segura
+    update_data.pop("routines", None)
+    program.sqlmodel_update(update_data)
 
     session.add(program)
     session.commit()
@@ -129,15 +118,11 @@ def update_workout_program(
     summary="Activar un programa y desactivar los demás",
 )
 def activate_workout_program(
-    program_id: UUID,
-    current_user: User = Depends(get_current_user),
+    program: WorkoutProgram = Depends(get_owned_workout_program),
     session: Session = Depends(get_session),
 ) -> WorkoutProgramRead:
-    program = session.get(WorkoutProgram, program_id)
-    _assert_program_owned(program, current_user.id)
-
     if not program.is_active:
-        _deactivate_others(session, current_user.id)
+        _deactivate_others(session, program.user_id)
         program.is_active = True
         session.add(program)
         session.commit()
@@ -153,14 +138,10 @@ def activate_workout_program(
     summary="Subir o reemplazar la imagen de un programa",
 )
 async def upload_program_image(
-    program_id: UUID,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    program: WorkoutProgram = Depends(get_owned_workout_program),
     session: Session = Depends(get_session),
 ) -> WorkoutProgramRead:
-    program = session.get(WorkoutProgram, program_id)
-    _assert_program_owned(program, current_user.id)
-
     if not file.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -170,7 +151,7 @@ async def upload_program_image(
     if program.image_url:
         storage_service.delete_program_image(program.image_url)
 
-    program.image_url = await storage_service.upload_program_image(file, str(program_id))
+    program.image_url = await storage_service.upload_program_image(file, str(program.id))
 
     session.add(program)
     session.commit()
@@ -184,11 +165,8 @@ async def upload_program_image(
     summary="Eliminar un programa",
 )
 def delete_workout_program(
-    program_id: UUID,
-    current_user: User = Depends(get_current_user),
+    program: WorkoutProgram = Depends(get_owned_workout_program),
     session: Session = Depends(get_session),
 ) -> None:
-    program = session.get(WorkoutProgram, program_id)
-    _assert_program_owned(program, current_user.id)
     session.delete(program)
     session.commit()

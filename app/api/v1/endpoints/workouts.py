@@ -4,12 +4,10 @@ from sqlmodel import Session, select
 from typing import List
 from uuid import UUID
 
-from app.api.v1.deps import get_current_user
+from app.api.v1.deps import get_current_user, get_owned_workout_session, get_active_workout_session, get_owned_workout_set
 from app.core.database import get_session
 from app.core.exceptions import (
-    WorkoutSessionNotFoundError,
     WorkoutSessionAlreadyEndedError,
-    WorkoutSetNotFoundError,
     ExerciseNotFoundError,
 )
 from app.models.user import User
@@ -122,24 +120,12 @@ def get_workout_sessions(
     summary="Obtener la sesión de entrenamiento actualmente activa",
 )
 def get_active_workout_session(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+    active_session: WorkoutSession = Depends(get_active_workout_session),
 ) -> WorkoutSessionDetail:
     """
     Busca y retorna la sesión de entrenamiento que no ha finalizado (ended_at es nulo).
     Si no existe ninguna sesión activa, retorna un error 404.
     """
-    statement = select(WorkoutSession).where(
-        WorkoutSession.user_id == current_user.id,
-        WorkoutSession.ended_at == None,
-    ).order_by(WorkoutSession.started_at.desc())
-    active_session = session.exec(statement).first()
-
-    if not active_session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No hay una sesión de entrenamiento activa.",
-        )
     return active_session
 
 
@@ -150,16 +136,11 @@ def get_active_workout_session(
     summary="Obtener detalles de una sesión de entrenamiento por ID",
 )
 def get_workout_session(
-    session_id: UUID,
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+    workout_session: WorkoutSession = Depends(get_owned_workout_session),
 ) -> WorkoutSessionDetail:
     """
     Retorna los detalles completos de una sesión de entrenamiento (incluyendo todas sus series e información del ejercicio).
     """
-    workout_session = session.get(WorkoutSession, session_id)
-    if not workout_session or workout_session.user_id != current_user.id:
-        raise WorkoutSessionNotFoundError()
     return workout_session
 
 
@@ -170,17 +151,12 @@ def get_workout_session(
     summary="Finalizar una sesión de entrenamiento activa",
 )
 def end_workout_session(
-    session_id: UUID,
-    current_user: User = Depends(get_current_user),
+    workout_session: WorkoutSession = Depends(get_owned_workout_session),
     session: Session = Depends(get_session),
 ) -> WorkoutSessionRead:
     """
     Finaliza una sesión de entrenamiento activa registrando la marca de tiempo de fin en UTC.
     """
-    workout_session = session.get(WorkoutSession, session_id)
-    if not workout_session or workout_session.user_id != current_user.id:
-        raise WorkoutSessionNotFoundError()
-
     if workout_session.ended_at is not None:
         raise WorkoutSessionAlreadyEndedError()
 
@@ -198,24 +174,19 @@ def end_workout_session(
     summary="Registrar dinámicamente una nueva serie en la sesión activa",
 )
 def add_workout_set(
-    session_id: UUID,
     set_in: WorkoutSetCreate,
-    current_user: User = Depends(get_current_user),
+    workout_session: WorkoutSession = Depends(get_owned_workout_session),
     session: Session = Depends(get_session),
 ) -> WorkoutSetRead:
     """
     Registra una serie realizada en tiempo real dentro de una sesión de entrenamiento activa.
     """
-    workout_session = session.get(WorkoutSession, session_id)
-    if not workout_session or workout_session.user_id != current_user.id:
-        raise WorkoutSessionNotFoundError()
-
     if workout_session.ended_at is not None:
         raise WorkoutSessionAlreadyEndedError()
 
     # Validar ejercicio accesible
     exercise = session.get(Exercise, set_in.exercise_id)
-    if not exercise or (exercise.user_id is not None and exercise.user_id != current_user.id):
+    if not exercise or (exercise.user_id is not None and exercise.user_id != workout_session.user_id):
         raise ExerciseNotFoundError()
 
     workout_set = WorkoutSet(
@@ -244,38 +215,27 @@ def add_workout_set(
     summary="Modificar/corregir una serie registrada anteriormente",
 )
 def update_workout_set(
-    set_id: UUID,
     set_in: WorkoutSetUpdate,
-    current_user: User = Depends(get_current_user),
+    workout_set: WorkoutSet = Depends(get_owned_workout_set),
     session: Session = Depends(get_session),
 ) -> WorkoutSetRead:
     """
     Permite modificar los datos de una serie específica (ej. corrección de peso o repeticiones erróneas).
     Solo se permite si la sesión a la que pertenece sigue activa/abierta.
     """
-    workout_set = session.get(WorkoutSet, set_id)
-    if not workout_set:
-        raise WorkoutSetNotFoundError()
-
-    # Validar que pertenezca al usuario
     workout_session = session.get(WorkoutSession, workout_set.session_id)
-    if not workout_session or workout_session.user_id != current_user.id:
-        raise WorkoutSetNotFoundError()
-
-    # Validar que la sesión no esté finalizada
-    if workout_session.ended_at is not None:
+    if not workout_session or workout_session.ended_at is not None:
         raise WorkoutSessionAlreadyEndedError()
 
     # Validar ejercicio si se cambia
     update_data = set_in.model_dump(exclude_unset=True)
     if "exercise_id" in update_data:
         exercise = session.get(Exercise, set_in.exercise_id)
-        if not exercise or (exercise.user_id is not None and exercise.user_id != current_user.id):
+        if not exercise or (exercise.user_id is not None and exercise.user_id != workout_session.user_id):
             raise ExerciseNotFoundError()
 
-    # Aplicar cambios parciales
-    for key, value in update_data.items():
-        setattr(workout_set, key, value)
+    # Aplicar cambios parciales de forma segura
+    workout_set.sqlmodel_update(update_data)
 
     session.add(workout_set)
     session.commit()
@@ -289,25 +249,15 @@ def update_workout_set(
     summary="Eliminar una serie registrada de la sesión activa",
 )
 def delete_workout_set(
-    set_id: UUID,
-    current_user: User = Depends(get_current_user),
+    workout_set: WorkoutSet = Depends(get_owned_workout_set),
     session: Session = Depends(get_session),
 ) -> None:
     """
     Elimina permanentemente una serie de la sesión de entrenamiento.
     Solo se permite si la sesión de entrenamiento sigue activa/abierta.
     """
-    workout_set = session.get(WorkoutSet, set_id)
-    if not workout_set:
-        raise WorkoutSetNotFoundError()
-
-    # Validar propiedad
     workout_session = session.get(WorkoutSession, workout_set.session_id)
-    if not workout_session or workout_session.user_id != current_user.id:
-        raise WorkoutSetNotFoundError()
-
-    # Validar que la sesión siga activa
-    if workout_session.ended_at is not None:
+    if not workout_session or workout_session.ended_at is not None:
         raise WorkoutSessionAlreadyEndedError()
 
     session.delete(workout_set)

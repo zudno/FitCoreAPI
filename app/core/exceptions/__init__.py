@@ -14,6 +14,7 @@ from app.core.exceptions.exercises import (
     ExerciseAccessDeniedError,
 )
 from app.core.exceptions.routines import RoutineNotFoundError
+from app.core.exceptions.workout_programs import WorkoutProgramNotFoundError
 from app.core.exceptions.workouts import (
     WorkoutSessionNotFoundError,
     WorkoutSessionAlreadyEndedError,
@@ -38,6 +39,8 @@ __all__ = [
     "ExerciseAccessDeniedError",
     # Routines
     "RoutineNotFoundError",
+    # Workout Programs
+    "WorkoutProgramNotFoundError",
     # Workouts
     "WorkoutSessionNotFoundError",
     "WorkoutSessionAlreadyEndedError",

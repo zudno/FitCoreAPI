@@ -3,13 +3,9 @@ from sqlmodel import Session, select
 from typing import List, Optional
 from uuid import UUID
 
-from app.api.v1.deps import get_current_user
+from app.api.v1.deps import get_current_user, get_owned_exercise, get_editable_exercise
 from app.core.database import get_session
-from app.core.exceptions import (
-    ExerciseNotFoundError,
-    ExerciseAccessDeniedError,
-    MuscleGroupNotFoundError,
-)
+from app.core.exceptions import MuscleGroupNotFoundError
 from app.models.user import User
 from app.models.exercise import Exercise
 from app.models.muscle_group import MuscleGroup
@@ -55,21 +51,11 @@ def get_exercises(
     summary="Obtener un ejercicio por ID",
 )
 def get_exercise(
-    exercise_id: UUID,
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+    exercise: Exercise = Depends(get_owned_exercise),
 ) -> ExerciseDetail:
     """
     Retorna un ejercicio específico si es global o si pertenece al usuario actual.
     """
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise ExerciseNotFoundError()
-        
-    # Verificar acceso (solo globales o propios)
-    if exercise.user_id is not None and exercise.user_id != current_user.id:
-        raise ExerciseNotFoundError()  # Se levanta 404 por seguridad para no revelar existencia
-        
     return exercise
 
 
@@ -122,37 +108,23 @@ def create_exercise(
     summary="Actualizar un ejercicio personalizado",
 )
 def update_exercise(
-    exercise_id: UUID,
     exercise_in: ExerciseUpdate,
-    current_user: User = Depends(get_current_user),
+    exercise: Exercise = Depends(get_editable_exercise),
     session: Session = Depends(get_session),
 ) -> ExerciseRead:
     """
     Actualiza los datos de un ejercicio personalizado.
     No se permite modificar ejercicios del sistema (globales).
     """
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise ExerciseNotFoundError()
-        
-    # Evitar edición de ejercicios de otros
-    if exercise.user_id is not None and exercise.user_id != current_user.id:
-        raise ExerciseNotFoundError()
-        
-    # Evitar edición de ejercicios globales del sistema
-    if exercise.user_id is None:
-        raise ExerciseAccessDeniedError()
-        
     # Si se actualiza el grupo muscular, validar su existencia
     if exercise_in.muscle_group_id is not None:
         muscle_group = session.get(MuscleGroup, exercise_in.muscle_group_id)
         if not muscle_group:
             raise MuscleGroupNotFoundError()
             
-    # Aplicar cambios parciales
+    # Aplicar cambios parciales de forma segura
     update_data = exercise_in.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(exercise, key, value)
+    exercise.sqlmodel_update(update_data)
         
     session.add(exercise)
     session.commit()
@@ -166,26 +138,13 @@ def update_exercise(
     summary="Eliminar un ejercicio personalizado",
 )
 def delete_exercise(
-    exercise_id: UUID,
-    current_user: User = Depends(get_current_user),
+    exercise: Exercise = Depends(get_editable_exercise),
     session: Session = Depends(get_session),
 ) -> None:
     """
     Elimina permanentemente un ejercicio personalizado creado por el usuario.
     No se permite eliminar ejercicios globales del sistema.
     """
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise ExerciseNotFoundError()
-        
-    # Evitar eliminación de ejercicios de otros
-    if exercise.user_id is not None and exercise.user_id != current_user.id:
-        raise ExerciseNotFoundError()
-        
-    # Evitar eliminación de ejercicios globales del sistema
-    if exercise.user_id is None:
-        raise ExerciseAccessDeniedError()
-        
     session.delete(exercise)
     session.commit()
     return None
@@ -198,9 +157,8 @@ def delete_exercise(
     summary="Subir imagen de un ejercicio personalizado",
 )
 async def upload_exercise_image(
-    exercise_id: UUID,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    exercise: Exercise = Depends(get_editable_exercise),
     session: Session = Depends(get_session),
 ) -> ExerciseRead:
     """
@@ -208,13 +166,6 @@ async def upload_exercise_image(
     Si ya tenía imagen, la anterior se elimina del bucket.
     Solo el propietario del ejercicio puede subir imágenes.
     """
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise ExerciseNotFoundError()
-
-    if exercise.user_id is None or exercise.user_id != current_user.id:
-        raise ExerciseAccessDeniedError()
-
     if not file.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -225,7 +176,7 @@ async def upload_exercise_image(
     if exercise.image_url:
         storage_service.delete_exercise_media(exercise.image_url)
 
-    image_url = await storage_service.upload_exercise_image(file, str(exercise_id))
+    image_url = await storage_service.upload_exercise_image(file, str(exercise.id))
     exercise.image_url = image_url
 
     session.add(exercise)
@@ -241,9 +192,8 @@ async def upload_exercise_image(
     summary="Subir GIF de un ejercicio personalizado",
 )
 async def upload_exercise_gif(
-    exercise_id: UUID,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    exercise: Exercise = Depends(get_editable_exercise),
     session: Session = Depends(get_session),
 ) -> ExerciseRead:
     """
@@ -251,13 +201,6 @@ async def upload_exercise_gif(
     Si ya tenía GIF almacenado en GCS, el anterior se elimina.
     Solo el propietario del ejercicio puede subir GIFs.
     """
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise ExerciseNotFoundError()
-
-    if exercise.user_id is None or exercise.user_id != current_user.id:
-        raise ExerciseAccessDeniedError()
-
     if file.content_type != "image/gif":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -268,7 +211,7 @@ async def upload_exercise_gif(
     if exercise.gif_url and "storage.googleapis.com" in exercise.gif_url:
         storage_service.delete_exercise_media(exercise.gif_url)
 
-    gif_url = await storage_service.upload_exercise_gif(file, str(exercise_id))
+    gif_url = await storage_service.upload_exercise_gif(file, str(exercise.id))
     exercise.gif_url = gif_url
 
     session.add(exercise)
