@@ -21,11 +21,16 @@ fitcore-api/
 │   ├── services/
 │   │   └── gemini_service.py      # Lógica de comunicación con Gemini
 │   └── main.py                    # Factory de la aplicación FastAPI
+├── docs/
+│   └── db_schema.md               # Esquema de la base de datos (Mermaid + Diccionario)
 ├── .env.example                   # Plantilla de variables de entorno
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
+
+## Documentación del Esquema de Datos
+Puedes consultar la estructura relacional detallada, los tipos de datos y los enums del proyecto en [docs/db_schema.md](docs/db_schema.md).
 
 ---
 
