@@ -1,0 +1,27 @@
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Archivos compilados y caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Archivos de logs y bases de datos locales
+*.log
+*.sqlite3
+
+# Entornos de desarrollo / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+# Google Cloud Storage Credentials
+gcs-key.json
+*.json
