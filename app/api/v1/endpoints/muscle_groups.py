@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status
 from sqlmodel import Session, select
 from typing import List
 from uuid import UUID
 
 from app.api.v1.deps import get_current_user
 from app.core.database import get_session
-from app.core.exceptions import MuscleGroupNotFoundError
+from app.core.exceptions import MuscleGroupNotFoundError, MuscleGroupAlreadyExistsError
 from app.models.user import User
 from app.models.muscle_group import MuscleGroup
 from app.schemas.muscle_group import MuscleGroupCreate, MuscleGroupRead
@@ -49,10 +49,7 @@ def create_muscle_group(
     statement = select(MuscleGroup).where(MuscleGroup.name == muscle_group_in.name)
     existing = session.exec(statement).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe un grupo muscular con este nombre.",
-        )
+        raise MuscleGroupAlreadyExistsError()
     
     muscle_group = MuscleGroup(**muscle_group_in.model_dump())
     session.add(muscle_group)

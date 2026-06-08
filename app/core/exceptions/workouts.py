@@ -23,3 +23,11 @@ class WorkoutSetNotFoundError(HTTPException):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Serie de entrenamiento no encontrada.",
         )
+
+
+class NoActiveWorkoutSessionError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay una sesión de entrenamiento activa.",
+        )

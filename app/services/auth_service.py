@@ -1,4 +1,3 @@
-from fastapi import HTTPException, status
 from jose import JWTError
 from sqlmodel import Session, select, or_
 

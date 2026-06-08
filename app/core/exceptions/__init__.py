@@ -12,6 +12,9 @@ from app.core.exceptions.exercises import (
     MuscleGroupNotFoundError,
     ExerciseNotFoundError,
     ExerciseAccessDeniedError,
+    MuscleGroupAlreadyExistsError,
+    ExerciseAlreadyExistsError,
+    InvalidGifError,
 )
 from app.core.exceptions.routines import RoutineNotFoundError
 from app.core.exceptions.workout_programs import WorkoutProgramNotFoundError
@@ -19,6 +22,7 @@ from app.core.exceptions.workouts import (
     WorkoutSessionNotFoundError,
     WorkoutSessionAlreadyEndedError,
     WorkoutSetNotFoundError,
+    NoActiveWorkoutSessionError,
 )
 
 __all__ = [
@@ -37,6 +41,9 @@ __all__ = [
     "MuscleGroupNotFoundError",
     "ExerciseNotFoundError",
     "ExerciseAccessDeniedError",
+    "MuscleGroupAlreadyExistsError",
+    "ExerciseAlreadyExistsError",
+    "InvalidGifError",
     # Routines
     "RoutineNotFoundError",
     # Workout Programs
@@ -45,6 +52,7 @@ __all__ = [
     "WorkoutSessionNotFoundError",
     "WorkoutSessionAlreadyEndedError",
     "WorkoutSetNotFoundError",
+    "NoActiveWorkoutSessionError",
     # Handlers
     "register_exception_handlers",
 ]

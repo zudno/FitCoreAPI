@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlmodel import Session, select
 from typing import List
 from uuid import UUID
 
 from app.api.v1.deps import get_current_user, get_owned_workout_program
 from app.core.database import get_session
+from app.core.exceptions import InvalidImageError
 from app.models.user import User
 from app.models.exercise import Exercise
 from app.models.workout_program import WorkoutProgram
@@ -143,10 +144,7 @@ async def upload_program_image(
     session: Session = Depends(get_session),
 ) -> WorkoutProgramRead:
     if not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El archivo debe ser una imagen (jpg, png, webp).",
-        )
+        raise InvalidImageError()
 
     if program.image_url:
         storage_service.delete_program_image(program.image_url)

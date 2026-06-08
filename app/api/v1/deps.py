@@ -14,6 +14,7 @@ from app.core.exceptions import (
     RoutineNotFoundError,
     WorkoutSessionNotFoundError,
     WorkoutSetNotFoundError,
+    NoActiveWorkoutSessionError,
 )
 from app.core.security import decode_token
 from app.models.user import User
@@ -138,11 +139,7 @@ def get_active_workout_session(
     active_session = session.exec(statement).first()
 
     if not active_session:
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No hay una sesión de entrenamiento activa.",
-        )
+        raise NoActiveWorkoutSessionError()
     return active_session
 
 

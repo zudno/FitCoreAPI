@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, status, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, status, UploadFile, File
 from sqlmodel import Session, select
 from typing import List, Optional
 from uuid import UUID
 
 from app.api.v1.deps import get_current_user, get_owned_exercise, get_editable_exercise
 from app.core.database import get_session
-from app.core.exceptions import MuscleGroupNotFoundError
+from app.core.exceptions import MuscleGroupNotFoundError, ExerciseAlreadyExistsError, InvalidImageError, InvalidGifError
 from app.models.user import User
 from app.models.exercise import Exercise
 from app.models.muscle_group import MuscleGroup
@@ -86,10 +86,7 @@ def create_exercise(
     )
     existing = session.exec(existing_statement).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya has creado un ejercicio personalizado con este nombre.",
-        )
+        raise ExerciseAlreadyExistsError()
         
     exercise = Exercise(
         **exercise_in.model_dump(),
@@ -167,10 +164,7 @@ async def upload_exercise_image(
     Solo el propietario del ejercicio puede subir imágenes.
     """
     if not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El archivo debe ser una imagen (jpg, png, webp).",
-        )
+        raise InvalidImageError()
 
     # Borrar imagen anterior si existe
     if exercise.image_url:
@@ -202,10 +196,7 @@ async def upload_exercise_gif(
     Solo el propietario del ejercicio puede subir GIFs.
     """
     if file.content_type != "image/gif":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El archivo debe ser un GIF (image/gif).",
-        )
+        raise InvalidGifError()
 
     # Borrar GIF anterior si estaba alojado en GCS
     if exercise.gif_url and "storage.googleapis.com" in exercise.gif_url:
