@@ -16,7 +16,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
-from app.schemas.auth import SignUpRequest, TokenResponse
+from app.schemas.auth import SignUpRequest, Token, TokenResponse
 
 
 def create_user(payload: SignUpRequest, session: Session) -> User:
@@ -52,9 +52,11 @@ def authenticate_user(identity: str, password: str, session: Session) -> TokenRe
         raise InactiveUserError()
 
     return TokenResponse(
-        access_token=create_access_token(user.email),
-        refresh_token=create_refresh_token(user.email),
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        token=Token(
+            access_token=create_access_token(user.email),
+            refresh_token=create_refresh_token(user.email),
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        ),
         user=user,
     )
 
@@ -70,8 +72,10 @@ def refresh_access_token(refresh_token: str, session: Session) -> TokenResponse:
         raise InvalidCredentialsError()
 
     return TokenResponse(
-        access_token=create_access_token(user.email),
-        refresh_token=create_refresh_token(user.email),
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        token=Token(
+            access_token=create_access_token(user.email),
+            refresh_token=create_refresh_token(user.email),
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        ),
         user=user,
     )
