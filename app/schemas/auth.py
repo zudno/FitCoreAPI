@@ -27,3 +27,7 @@ class Token(BaseModel):
 class TokenResponse(BaseModel):
     token: Token
     user: UserRead
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str

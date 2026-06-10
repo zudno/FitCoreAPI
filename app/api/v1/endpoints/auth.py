@@ -2,8 +2,19 @@ from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app.core.database import get_session
-from app.schemas.auth import LoginRequest, SignUpRequest, TokenRefreshRequest, TokenResponse
-from app.services.auth_service import authenticate_user, create_user, refresh_access_token
+from app.schemas.auth import (
+    GoogleLoginRequest,
+    LoginRequest,
+    SignUpRequest,
+    TokenRefreshRequest,
+    TokenResponse,
+)
+from app.services.auth_service import (
+    authenticate_google_user,
+    authenticate_user,
+    create_user,
+    refresh_access_token,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -37,3 +48,13 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)) -> Tok
 )
 def refresh(payload: TokenRefreshRequest, session: Session = Depends(get_session)) -> TokenResponse:
     return refresh_access_token(payload.refresh_token, session)
+
+
+@router.post(
+    "/google",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Iniciar sesión o registrarse con Google",
+)
+def login_with_google(payload: GoogleLoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
+    return authenticate_google_user(payload.id_token, session)

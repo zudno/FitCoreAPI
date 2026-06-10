@@ -1,5 +1,7 @@
 from jose import JWTError
 from sqlmodel import Session, select, or_
+import uuid
+import random
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -17,6 +19,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas.auth import SignUpRequest, Token, TokenResponse
+from app.services.firebase_service import verify_firebase_token
 
 
 def create_user(payload: SignUpRequest, session: Session) -> User:
@@ -70,6 +73,58 @@ def refresh_access_token(refresh_token: str, session: Session) -> TokenResponse:
     user = session.exec(select(User).where(User.email == email)).first()
     if not user or not user.is_active:
         raise InvalidCredentialsError()
+
+    return TokenResponse(
+        token=Token(
+            access_token=create_access_token(user.email),
+            refresh_token=create_refresh_token(user.email),
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        ),
+        user=user,
+    )
+
+
+def authenticate_google_user(id_token: str, session: Session) -> TokenResponse:
+    # 1. Verificar el token de Firebase
+    try:
+        payload = verify_firebase_token(id_token, settings.FIREBASE_PROJECT_ID)
+    except ValueError as e:
+        print(f"Error de verificación de token de Firebase: {e}")
+        raise InvalidCredentialsError()
+
+    email = payload["email"]
+
+    # 2. Buscar si existe el usuario
+    user = session.exec(select(User).where(User.email == email)).first()
+
+    # 3. Si no existe, crear un nuevo usuario
+    if not user:
+        # Generar un nombre de usuario único basado en el email
+        base_username = email.split("@")[0]
+        base_username = "".join(c for c in base_username if c.isalnum() or c in ("_", ".")).lower()
+        if not base_username:
+            base_username = "user"
+
+        username = base_username
+        while True:
+            existing = session.exec(select(User).where(User.username == username)).first()
+            if not existing:
+                break
+            username = f"{base_username}{random.randint(1000, 9999)}"
+
+        # Crear contraseña dummy y guardarla hasheada
+        dummy_password = uuid.uuid4().hex + uuid.uuid4().hex
+        user = User(
+            username=username,
+            email=email,
+            hashed_password=hash_password(dummy_password),
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+    if not user.is_active:
+        raise InactiveUserError()
 
     return TokenResponse(
         token=Token(

@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     GCS_BUCKET_NAME: str
     GCS_CREDENTIALS_FILE: str
 
+    # --- Firebase ---
+    FIREBASE_PROJECT_ID: str = "fitcoreapp-7d1ff"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
