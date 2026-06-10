@@ -87,9 +87,8 @@ def refresh_access_token(refresh_token: str, session: Session) -> TokenResponse:
 def authenticate_google_user(id_token: str, session: Session) -> TokenResponse:
     # 1. Verificar el token de Firebase
     try:
-        payload = verify_firebase_token(id_token, settings.FIREBASE_PROJECT_ID)
-    except ValueError as e:
-        print(f"Error de verificación de token de Firebase: {e}")
+        payload = verify_firebase_token(id_token)
+    except ValueError:
         raise InvalidCredentialsError()
 
     email = payload["email"]
