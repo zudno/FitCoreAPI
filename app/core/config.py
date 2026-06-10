@@ -38,6 +38,7 @@ class Settings(BaseSettings):
 
     # --- Firebase ---
     FIREBASE_PROJECT_ID: str = "fitcoreapp-7d1ff"
+    FIREBASE_CREDENTIALS_FILE: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
