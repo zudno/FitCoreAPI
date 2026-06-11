@@ -93,13 +93,13 @@ def authenticate_google_user(id_token: str, session: Session) -> TokenResponse:
         raise InvalidCredentialsError()
 
     email = payload["email"]
+    picture: str | None = payload.get("picture")
 
     # 2. Buscar si existe el usuario
     user = session.exec(select(User).where(User.email == email)).first()
 
     # 3. Si no existe, crear un nuevo usuario
     if not user:
-        # Generar un nombre de usuario único basado en el email
         base_username = email.split("@")[0]
         base_username = "".join(c for c in base_username if c.isalnum() or c in ("_", ".")).lower()
         if not base_username:
@@ -118,7 +118,14 @@ def authenticate_google_user(id_token: str, session: Session) -> TokenResponse:
             email=email,
             hashed_password=hash_password(dummy_password),
             auth_provider=AuthProvider.GOOGLE,
+            avatar_url=picture,
         )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    elif user.avatar_url != picture:
+        # Refrescar avatar en cada login por si el usuario cambió su foto en Google
+        user.avatar_url = picture
         session.add(user)
         session.commit()
         session.refresh(user)
