@@ -45,3 +45,8 @@ class SetType(str, Enum):
     DROP_SET = "drop_set"
     FAILURE = "failure"
 
+
+class AuthProvider(str, Enum):
+    NATIVE = "native"
+    GOOGLE = "google"
+

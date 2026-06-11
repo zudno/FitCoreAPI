@@ -17,6 +17,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.models.enums import AuthProvider
 from app.models.user import User
 from app.schemas.auth import SignUpRequest, Token, TokenResponse
 from app.services.firebase_service import verify_firebase_token
@@ -111,12 +112,12 @@ def authenticate_google_user(id_token: str, session: Session) -> TokenResponse:
                 break
             username = f"{base_username}{random.randint(1000, 9999)}"
 
-        # Crear contraseña dummy y guardarla hasheada
         dummy_password = uuid.uuid4().hex + uuid.uuid4().hex
         user = User(
             username=username,
             email=email,
             hashed_password=hash_password(dummy_password),
+            auth_provider=AuthProvider.GOOGLE,
         )
         session.add(user)
         session.commit()

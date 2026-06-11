@@ -1,9 +1,11 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
+import sqlalchemy as sa
 from sqlmodel import Field, Relationship, SQLModel
-from typing import TYPE_CHECKING
+
+from app.models.enums import AuthProvider
 
 if TYPE_CHECKING:
     from .profile import Profile
@@ -21,6 +23,14 @@ class User(SQLModel, table=True):
     username: str = Field(unique=True, index=True, nullable=False)
     email: str = Field(unique=True, index=True, nullable=False)
     hashed_password: str = Field(nullable=False)
+    auth_provider: AuthProvider = Field(
+        default=AuthProvider.NATIVE,
+        sa_column=sa.Column(
+            sa.Enum(AuthProvider, name="authprovider"),
+            nullable=False,
+            server_default=AuthProvider.NATIVE.value,
+        ),
+    )
     avatar_url: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
