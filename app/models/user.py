@@ -37,3 +37,7 @@ class User(SQLModel, table=True):
 
     # Relación con Profile
     profile: Optional["Profile"] = Relationship(back_populates="user", sa_relationship_kwargs={"uselist": False})
+
+    @property
+    def has_profile(self) -> bool:
+        return self.profile is not None

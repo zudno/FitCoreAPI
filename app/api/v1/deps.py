@@ -2,6 +2,7 @@ from uuid import UUID
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.core.database import get_session
@@ -39,7 +40,9 @@ def get_current_user(
     except JWTError:
         raise InvalidTokenError()
 
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(
+        select(User).where(User.email == email).options(selectinload(User.profile))
+    ).first()
 
     if not user:
         raise InvalidTokenError()

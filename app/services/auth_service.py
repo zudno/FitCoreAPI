@@ -1,4 +1,5 @@
 from jose import JWTError
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, or_
 import uuid
 import random
@@ -47,6 +48,7 @@ def authenticate_user(identity: str, password: str, session: Session) -> TokenRe
     # Buscar por email O por username
     user = session.exec(
         select(User).where(or_(User.email == identity, User.username == identity))
+        .options(selectinload(User.profile))
     ).first()
 
     if not user or not verify_password(password, user.hashed_password):
@@ -71,7 +73,9 @@ def refresh_access_token(refresh_token: str, session: Session) -> TokenResponse:
     except JWTError:
         raise InvalidRefreshTokenError()
 
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(
+        select(User).where(User.email == email).options(selectinload(User.profile))
+    ).first()
     if not user or not user.is_active:
         raise InvalidCredentialsError()
 
@@ -96,7 +100,9 @@ def authenticate_google_user(id_token: str, session: Session) -> TokenResponse:
     picture: str | None = payload.get("picture")
 
     # 2. Buscar si existe el usuario
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(
+        select(User).where(User.email == email).options(selectinload(User.profile))
+    ).first()
 
     # 3. Si no existe, crear un nuevo usuario
     if not user:
@@ -122,13 +128,18 @@ def authenticate_google_user(id_token: str, session: Session) -> TokenResponse:
         )
         session.add(user)
         session.commit()
-        session.refresh(user)
+        # Recargar con profile para que has_profile sea correcto
+        user = session.exec(
+            select(User).where(User.id == user.id).options(selectinload(User.profile))
+        ).first()
     elif user.avatar_url != picture:
         # Refrescar avatar en cada login por si el usuario cambió su foto en Google
         user.avatar_url = picture
         session.add(user)
         session.commit()
-        session.refresh(user)
+        user = session.exec(
+            select(User).where(User.id == user.id).options(selectinload(User.profile))
+        ).first()
 
     if not user.is_active:
         raise InactiveUserError()
